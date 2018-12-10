@@ -4,7 +4,7 @@ BIN_DIR = ./bin
 INC_DIR = ./include
 LIB_DIR = ./lib
 
-CC = g++
+CC = clang
 CFLAGS_DEBUG = -DCONFIG_DEBUG
 CFLAGS_DEBUG_MERGE =  $(CFLAGS_DEBUG)
 CFLAGS = -g $(CFLAGS_DEBUG_MERGE) -I$(INC_DIR) -L$(LIB_DIR) 
