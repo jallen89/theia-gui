@@ -16,4 +16,13 @@ int main() {
 
     update_thread_ctx(1, 1);
     update_thread_ctx(1, 2);
+
+    add_ctx(1);
+
+
+    struct context *ctx;
+    ctx = _get_ctx(1);
+    if (ctx)
+        printf("Received context with id %s\n", ctx->id);
+    ctx = _get_ctx(2);
 }

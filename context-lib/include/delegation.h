@@ -7,7 +7,7 @@
 
 struct context
 {
-    int id;
+    char *id;
 };
 
 struct delegator
@@ -36,5 +36,9 @@ void init_lctx();
 struct delegator *_get_del(int del_id);
 void update_thread_ctx(int tid, int del_id);
 void add_del(int del_id);
+void add_ctx(int ctx_id);
+
+struct context *_get_ctx(int ctx_id);
+struct delegator *_get_del(int del_id);
 
 #endif

@@ -28,14 +28,16 @@
 //    return z;
 //}
 //
+//
+#define IDENTIFIER __attribute__((annotate("identifier")))
+#define INDICATOR __attribute__((annotate("indicator")))
+#define DELEGATOR __attribute__((annotate("delegator")))
 struct test {
     int x;
     int y;
-    int z;
+    IDENTIFIER int z;
 };
 
-#define INDICATOR __attribute__((annotate("indicator")))
-#define DELEGATOR __attribute__((annotate("delegator")))
 int main() {
 
     INDICATOR struct test x;

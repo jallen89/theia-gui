@@ -1,5 +1,6 @@
 #include "delegation.h"
 
+
 void init_lctx()
 {
     T_DEBUG("Initializing lctx!\n");
@@ -7,6 +8,7 @@ void init_lctx()
     map_init(&thread_tbl.m);
     map_init(&ctx_tbl.m);
 }
+
 
 
 void add_del(int del_id)
@@ -21,6 +23,21 @@ void add_del(int del_id)
     err = map_set(&del_tbl.m, del.id, del);
     if (err)
         T_DEBUG("Failed to insert delegator: %d into del_table\n", del_id);
+}
+
+
+void add_ctx(int ctx_id)
+{
+    struct context ctx;
+    int err;
+
+    ctx.id = malloc(sizeof(char)*17);
+    sprintf(ctx.id, "%d", ctx_id);
+
+    T_DEBUG("Adding ctx_id %s into ctx table.\n", ctx.id);
+    err = map_set(&ctx_tbl.m, ctx.id, ctx);
+    if (err)
+        T_DEBUG("Failed to insert ctx: %d into ctx_table\n", ctx_id);
 }
 
 
@@ -53,3 +70,16 @@ struct delegator *_get_del(int del_id) {
 
     return del;
 }
+
+struct context *_get_ctx(int ctx_id) {
+    struct context *ctx;
+    char tmp[17];
+    sprintf(tmp, "%d", ctx_id);
+
+    ctx = map_get(&ctx_tbl.m, tmp);
+    if (!ctx)
+        T_DEBUG("A ctx with ctx_id %d does not exist!\n", ctx_id);
+
+    return ctx;
+}
+
