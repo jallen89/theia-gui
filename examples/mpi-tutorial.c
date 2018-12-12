@@ -7,8 +7,6 @@
 #define DELEGATOR __attribute__((annotate("delegator")))
 #define IND_IDENTIFIER __attribute__((annotate("ind_indentifier")))
 #define DEL_IDENTIFIER __attribute__((annotate("del_indentifier")))
-
-
 /* MPI Static Analysis
  *
  * The MPI Static Analysis Pass does the following 4 steps:

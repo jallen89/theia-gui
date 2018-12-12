@@ -10,6 +10,7 @@
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/IR/Module.h"
 #include <set>
+
 using namespace llvm;
 
 namespace {
@@ -85,8 +86,8 @@ namespace {
       *  store i32 %26, i32* %32, align 8
       *  ---------------------------------------------- */
       for (auto *TFu : TF->users()) {
-        for(auto *Bu : TFu->users()) {
-          for(auto u: Bu->users()) {
+        for (auto *Bu : TFu->users()) {
+          for (auto u: Bu->users()) {
             identifiers.insert(u);
           }
         }
@@ -175,7 +176,7 @@ namespace {
       pa(delegators, "indicators");
     }
   
-    };
+  };
 }
 
 char PartitionPass::ID = 0;
