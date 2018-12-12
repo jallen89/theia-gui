@@ -49,7 +49,7 @@ namespace {
     }
   
   
-    /* Methods for instrumenting code.---------------------------------------
+    /* ------------------Methods for instrumenting code.-----------------------
      * TODO: Create Reference to Functions needed by runtime library.
      * TODO: Update runtime library to work correctly.
      * TODO: Instrument creation of delegators, so they can inherit the
@@ -180,7 +180,7 @@ namespace {
 }
 
 char PartitionPass::ID = 0;
-
-static RegisterPass<PartitionPass> X("PartitionPass", "PartitionPass Pass",
-                   false,  // Look only at CFG?
-                   true); // Is this an analysis Pass?
+static RegisterPass<PartitionPass> X(
+    "PartitionPass", "PartitionPass Pass",
+    false, 
+    true);
