@@ -74,11 +74,11 @@
  * In this case, we can use the id field, which is a unique id for each user input.
  */
 struct input_buffer {
-    char *user_input;
-    size_t size;
-    //@identifier - The id field can be used to differentiate the instances of
-    //a unit data structure, which services as an identifier for each context.
-    IND_IDENTIFIER int id;
+  char *user_input;
+  size_t size;
+  //@identifier - The id field can be used to differentiate the instances of
+  //a unit data structure, which services as an identifier for each context.
+  IND_IDENTIFIER int id;
 };
 
 
@@ -115,10 +115,10 @@ INDICATOR struct input_buffer curr_input;
  * worker thread will be needed.
  */
 struct subtask {
-    void (*run)(struct subtask *cur_task, struct input_buffer *);
-    // Each subtask (delegator data structure) needs its own unique id, similar
-    // to identifier structures.
-    DEL_IDENTIFIER int id;
+  void (*run)(struct subtask *cur_task, struct input_buffer *);
+  // Each subtask (delegator data structure) needs its own unique id, similar
+  // to identifier structures.
+  DEL_IDENTIFIER int id;
 };
 
 
@@ -137,53 +137,54 @@ int main(int argc, char **argv) {
   DELEGATOR struct subtask *sub_task = NULL;
 
   while (1) {
-    //Get user input. For this program we want to track what "user_input"
-    //caused a set of system calls.
-    user_input = (char *) malloc(n);
-    bytes_read = getline(&user_input, &n, stdin);
+  //Get user input. For this program we want to track what "user_input"
+  //caused a set of system calls.
+  user_input = (char *) malloc(n);
+  bytes_read = getline(&user_input, &n, stdin);
 
-    // The `curr_input` variable is one of our @indicator variables for the unit
-    // we are using as context. Therefore, when we see an update to this value,
-    // we need to update the context of the current thread to express this
-    // update.
-    // XXX. During LLVM passes, we need to identify defs of any indicator
-    // vars.
-    curr_input.user_input = user_input;
-    curr_input.size = bytes_read;
-    curr_input.id = counter++;
-    // Instrumentation: 
-    //   thread_context = curr_input.id;
+  // The `curr_input` variable is one of our @indicator variables for the unit
+  // we are using as context. Therefore, when we see an update to this value,
+  // we need to update the context of the current thread to express this
+  // update.
+  // XXX. During LLVM passes, we need to identify defs of any indicator
+  // vars.
+  curr_input.user_input = user_input;
+  curr_input.size = bytes_read;
+  curr_input.id = counter++;
+  // Instrumentation: 
+  //   thread_context = curr_input.id;
 
-    // Create a new subtask, which is responsible for converting the string
-    // into uppercase:
-    
-    // The creation of the subtask needs to be tracked since it is a
-    // delegator. Recal a  delegator data structure represents a structure that 
-    // defines a subtask, which will be potentially be executed by a different
-    // thread. MPI needs to track creation of delegation structures. 
-    // This is because MPI assigns a "context" to each delegation structure,
-    // and the delegation structure will inherit the current context that is
-    // running in the thread that created/instatiated the new sub task.
-    sub_task = malloc(sizeof(struct subtask));
-    // MPIs instrumentation would be similar to the following:
-    // 1. Set context for subtask to current context.
-    // 2. Update delegation table.
-    // sub_task->context = delegation_table[cur_task];
-    // delegation_table[sub_task] = sub_task->context.
-    sub_task->run = run_upper;
-    sub_task->run(sub_task, &curr_input);
+  // Create a new subtask, which is responsible for converting the string
+  // into uppercase:
+  
+  // The creation of the subtask needs to be tracked since it is a
+  // delegator. Recal a  delegator data structure represents a structure that 
+  // defines a subtask, which will be potentially be executed by a different
+  // thread. MPI needs to track creation of delegation structures. 
+  // This is because MPI assigns a "context" to each delegation structure,
+  // and the delegation structure will inherit the current context that is
+  // running in the thread that created/instatiated the new sub task.
+  sub_task = malloc(sizeof(struct subtask));
+  sub_task->id = counter++;
+  // MPIs instrumentation would be similar to the following:
+  // 1. Set context for subtask to current context.
+  // 2. Update delegation table.
+  // sub_task->context = delegation_table[cur_task];
+  // delegation_table[sub_task] = sub_task->context.
+  sub_task->run = run_upper;
+  sub_task->run(sub_task, &curr_input);
   }
   return 0;
 }
 
 void *upper(void *in) {
-    printf("Background Thread.\n");
-    struct input_buffer *input = (struct input_buffer*) in;
-    for (size_t i = 0; i < input->size; i++) {
-        input->user_input[i] = toupper(input->user_input[i]);
-    }
-    printf("Input (%lu): %s", input->size, input->user_input);
-    return NULL;
+  printf("Background Thread.\n");
+  struct input_buffer *input = (struct input_buffer*) in;
+  for (size_t i = 0; i < input->size; i++) {
+    input->user_input[i] = toupper(input->user_input[i]);
+  }
+  printf("Input (%lu): %s", input->size, input->user_input);
+  return NULL;
 }
 
 void run_upper(struct subtask *task, struct input_buffer* input) {
@@ -191,8 +192,8 @@ void run_upper(struct subtask *task, struct input_buffer* input) {
   int rc = 0;
   rc = pthread_create(&thread, NULL, upper, (void *) &curr_input);
   if (rc) {
-      fprintf(stderr, "Error; return code from pthread_create() is %d\n", rc);
-      exit(-1);
+    fprintf(stderr, "Error; return code from pthread_create() is %d\n", rc);
+    exit(-1);
   }
 }
 

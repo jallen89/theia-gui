@@ -29,6 +29,7 @@
 //}
 //
 //
+#include<stdlib.h>
 #define IDENTIFIER __attribute__((annotate("identifier")))
 #define INDICATOR __attribute__((annotate("indicator")))
 #define DELEGATOR __attribute__((annotate("delegator")))
@@ -38,10 +39,12 @@ struct test {
     IDENTIFIER int z;
 };
 
-int main() {
+struct ind_test {
+  int x; 
+  IDENTIFIER int y;
+};
 
-    INDICATOR struct test x;
-    x.x = 4;
-    x.y = 5;
-    x.z = 6;
+int main() {
+    INDICATOR struct ind_test ind_x;
+    ind_x.y = 4;
 }
