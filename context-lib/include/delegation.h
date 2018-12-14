@@ -13,7 +13,7 @@ struct context
 struct delegator
 {
     char *id;
-    int  ctx;
+    char *ctx_id;
 };
 
 typedef map_t(struct delegator) del_map_t;
@@ -33,13 +33,15 @@ struct {
 
 void init_lctx();
 
-struct delegator *_get_del(int del_id);
 void update_thread_ctx(int tid, int ctx_id);
-void add_del(int del_id);
 void add_ctx(int ctx_id);
 struct context *get_thread_ctx(int tid);
-void instrument_indicator(int c_id);
 
+// Instrumentation functions.
+void instrument_indicator(int c_id);
+void instrument_delegator(int del_id);
+
+struct delegator *_get_del(int del_id);
 struct context *_get_ctx(int ctx_id);
 struct delegator *_get_del(int del_id);
 

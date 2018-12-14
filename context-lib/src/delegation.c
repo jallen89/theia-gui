@@ -13,7 +13,8 @@ void init_lctx()
     map_init(&ctx_tbl.m);
 }
 
-void instrument_indicator(int c_id) {
+void instrument_indicator(int c_id)
+{
   long tid;
   struct context *p_ctx = NULL;
   
@@ -31,21 +32,6 @@ void instrument_indicator(int c_id) {
   update_thread_ctx(tid, c_id);
 }
 
-void add_del(int del_id)
-{
-    struct delegator del;
-    int err;
-
-    del.id = malloc(sizeof(char)*17);
-    sprintf(del.id, "%d", del_id);
-
-    T_DEBUG("Adding del_id %s into delegator table.\n", del.id);
-    err = map_set(&del_tbl.m, del.id, del);
-    if (err)
-        T_DEBUG("Failed to insert delegator: %d into del_table\n", del_id);
-}
-
-
 void add_ctx(int ctx_id)
 {
     struct context ctx;
@@ -58,6 +44,43 @@ void add_ctx(int ctx_id)
     err = map_set(&ctx_tbl.m, ctx.id, ctx);
     if (err)
         T_DEBUG("Failed to insert ctx: %d into ctx_table\n", ctx_id);
+}
+
+
+void instrument_delegator(int del_id)
+{
+  long tid;
+  int err;
+  struct context *t_ctx = NULL;
+  struct delegator *del = NULL;
+
+  // Get delegator struct or create new one.
+  del = _get_del(del_id);
+  if (!del) {
+    del= malloc(sizeof(struct delegator));
+    del->id = malloc(sizeof(char)*17);
+    sprintf(del->id, "%d", del_id);
+  }
+
+  //Get the current thread's context.
+  tid = syscall(SYS_gettid);
+  t_ctx = get_thread_ctx(tid);
+
+  // Set delegator's context.
+  if (!t_ctx) {
+    T_DEBUG("The current thread does not have have a context!\n");
+  } else {
+    del->ctx_id = t_ctx->id;
+  }
+
+  // Add delegator to del table.
+  err = map_set(&del_tbl.m, del->id, *del);
+  if (err) {
+      T_DEBUG("Failed to insert delegator: %d into del_table\n", del_id);
+  } else {
+    T_DEBUG("Inserted %d  (ctx %s) into del_table\n", 
+            del_id, del->ctx_id);
+  }
 }
 
 

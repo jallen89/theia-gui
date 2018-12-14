@@ -94,7 +94,10 @@ namespace {
         }
       }
     }
-  
+
+    void instrument_delegators() {
+    }
+    
     /*-----------------Methods for finding annotated variables-----------------*/
     bool find_identifiers(Module &M) {
       errs() << "Searching for Identifiers.\n";
