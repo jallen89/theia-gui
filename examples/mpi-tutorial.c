@@ -88,7 +88,7 @@ struct input_buffer {
  * the value of a indicator variable changes, it implies a change in context,
  * which will need to be monitored.
  */
-INDICATOR struct input_buffer curr_input;
+INDICATOR struct input_buffer *curr_input;
 
 /* 
  * The subtask data structure represents a task that will be invoked under a
@@ -128,7 +128,7 @@ void run_upper(struct subtask *task, struct input_buffer* input);
 
 
 int main(int argc, char **argv) {
-  char *user_input = NULL;
+  struct input_buffer *user_input;
   size_t n = 1024;
   size_t bytes_read = 0;
   int counter = 0;
@@ -137,8 +137,11 @@ int main(int argc, char **argv) {
   while (1) {
   //Get user input. For this program we want to track what "user_input"
   //caused a set of system calls.
-  user_input = (char *) malloc(n);
-  bytes_read = getline(&user_input, &n, stdin);
+  user_input = (struct input_buffer *) malloc(sizeof(struct input_buffer));
+  user_input->user_input = (char *) malloc(sizeof(char)*n);
+  bytes_read = getline(&user_input->user_input, &n, stdin);
+  user_input->size = bytes_read;
+  user_input->id = counter++;
 
   // The `curr_input` variable is one of our @indicator variables for the unit
   // we are using as context. Therefore, when we see an update to this value,
@@ -146,11 +149,8 @@ int main(int argc, char **argv) {
   // update.
   // XXX. During LLVM passes, we need to identify defs of any indicator
   // vars.
-  curr_input.user_input = user_input;
-  curr_input.size = bytes_read;
-  curr_input.id = counter++;
+  curr_input = user_input;
   // Instrumentation: 
-  //   thread_context = curr_input.id;
 
   // Create a new subtask, which is responsible for converting the string
   // into uppercase:
@@ -188,7 +188,7 @@ void *upper(void *in) {
 void run_upper(struct subtask *task, struct input_buffer* input) {
   pthread_t thread;
   int rc = 0;
-  rc = pthread_create(&thread, NULL, upper, (void *) &curr_input);
+  rc = pthread_create(&thread, NULL, upper, (void *) curr_input);
   if (rc) {
     fprintf(stderr, "Error; return code from pthread_create() is %d\n", rc);
     exit(-1);

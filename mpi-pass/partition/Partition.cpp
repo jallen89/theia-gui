@@ -22,8 +22,12 @@ namespace {
     std::set<Value*> delegators;
     std::set<Value*> identifiers;
     // Functions created for instrumentation.
+    Constant *IDInitFunc = nullptr;
     Constant *IndicatorInitFunc = nullptr;
-    Module *mM = nullptr;;
+    Module *mM = nullptr;
+
+    //Maps A Indicator/Delegator struct mapped to the index into ID field.
+    std::map<Type *, std::vector<Value *>> id_map;
   
     virtual bool runOnModule(Module &M) {
       this->mM = &M;
@@ -35,19 +39,28 @@ namespace {
       find_global_annotations(M);
       find_local_annotations(M);
       find_identifiers(M);
-  
+      //errs() << *mM->getFunction("main") << "\n";
       // Step 2: Begin Instrumenting Source code. 
-      instrument_identifiers();
+      instrument_indicators();
     }
   
     virtual void create_instrumentation_funcs() {
+
+      // Create Function that instruments around ID switches.
       LLVMContext &Ctx = mM->getContext();
       std::vector<Type*> paramTypes = {};
       Type *retType = Type::getVoidTy(Ctx);
-      FunctionType *IndicatorIni = FunctionType::get(retType, paramTypes, false);
-      IndicatorInitFunc = mM->getOrInsertFunction("hello", IndicatorIni);
+      FunctionType *IDIni = FunctionType::get(retType, paramTypes, false);
+      IDInitFunc = mM->getOrInsertFunction("hello", IDIni);
+      paramTypes.clear();
+
+      // Create Function that instruments around indicator switches.
+      paramTypes.insert(paramTypes.begin(), Type::getInt32Ty(Ctx));
+      retType = Type::getVoidTy(Ctx);
+      FunctionType *IndicatorInit = FunctionType::get(retType, paramTypes, false);
+      IndicatorInitFunc = mM->getOrInsertFunction("indicator_switch", IndicatorInit);
+      paramTypes.clear();
     }
-  
   
     /* ------------------Methods for instrumenting code.-----------------------
      * TODO: Create Reference to Functions needed by runtime library.
@@ -62,7 +75,26 @@ namespace {
         if (auto *AI = dyn_cast<StoreInst>(ind)) {
           IRBuilder<> builder(AI);
           builder.SetInsertPoint(AI->getParent(), ++builder.GetInsertPoint());
-          builder.CreateCall(this->IndicatorInitFunc);
+          builder.CreateCall(this->IDInitFunc);
+        }
+      }
+    }
+
+    void instrument_indicators() {
+
+      errs() << "Instrumenting Indicators.\n";
+      for (auto *indi : indicators) {
+        for (auto *u : indi->users()) {
+          if (auto *I = dyn_cast<StoreInst>(u)) {
+            // The indexes into the struct where the ID field exists.
+            auto idx = ArrayRef<Value*>(id_map[I->getOperand(0)->getType()]);
+            // Create GEP, Store, and IndiFunc Call.
+            IRBuilder<> builder(I);
+            builder.SetInsertPoint(I->getParent(), ++builder.GetInsertPoint());
+            auto *gep = builder.CreateGEP(I->getOperand(0), idx);
+            auto *cid = builder.CreateLoad(gep);
+            builder.CreateCall(this->IndicatorInitFunc, {cid});
+          }
         }
       }
     }
@@ -76,21 +108,13 @@ namespace {
         errs() << "No Identifiers Found!\n";
         return false;
       }
-  
-      /* The first outer loop is the call to the annotation function, which is 
-      *  followed by a bitcast, which creates the new annotated variable. We
-      *  need to instrument after the store instruction on the annotated var.
-      *  Example:--------------------------------------
-      *  %31 = call i8* @llvm.ptr.annotation.p0i8(.....
-      *  %32 = bitcast i8* %31 to i32*
-      *  store i32 %26, i32* %32, align 8
-      *  ---------------------------------------------- */
+ 
+      // Get the ID field for each ID field.
       for (auto *TFu : TF->users()) {
-        for (auto *Bu : TFu->users()) {
-          for (auto u: Bu->users()) {
-            identifiers.insert(u);
-          }
-        }
+        auto *gep = v2u(v2u(TFu->getOperand(0))->getOperand(0));
+        auto *S_ty = gep->getOperand(0)->getType();
+        auto g_op = [gep](int idx){return gep->getOperand(idx);};
+        id_map[S_ty] = std::vector<Value*>({g_op(1), g_op(2)});
       }
       return true;
     }
@@ -175,7 +199,10 @@ namespace {
       pa(delegators, "delegators");
       pa(delegators, "indicators");
     }
-  
+
+    User *v2u(Value *v) {
+      return dyn_cast<User>(v);
+    }
   };
 }
 
