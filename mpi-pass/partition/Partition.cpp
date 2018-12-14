@@ -31,21 +31,17 @@ namespace {
   
     virtual bool runOnModule(Module &M) {
       this->mM = &M;
-  
       // Add the functions from runtime lib to this module.
       create_instrumentation_funcs();
-  
       // Step 1: Extract the necessary annotations.
       find_global_annotations(M);
       find_local_annotations(M);
       find_identifiers(M);
-      //errs() << *mM->getFunction("main") << "\n";
       // Step 2: Begin Instrumenting Source code. 
       instrument_indicators();
     }
   
     virtual void create_instrumentation_funcs() {
-
       // Create Function that instruments around ID switches.
       LLVMContext &Ctx = mM->getContext();
       std::vector<Type*> paramTypes = {};
@@ -57,13 +53,14 @@ namespace {
       // Create Function that instruments around indicator switches.
       paramTypes.insert(paramTypes.begin(), Type::getInt32Ty(Ctx));
       retType = Type::getVoidTy(Ctx);
-      FunctionType *IndicatorInit = FunctionType::get(retType, paramTypes, false);
-      IndicatorInitFunc = mM->getOrInsertFunction("instrument_indicator", IndicatorInit);
+      FunctionType *IndicatorInit = FunctionType::get(
+            retType, paramTypes, false);
+      IndicatorInitFunc = mM->getOrInsertFunction(
+            "instrument_indicator", IndicatorInit);
       paramTypes.clear();
     }
   
     /* ------------------Methods for instrumenting code.-----------------------
-     * TODO: Create Reference to Functions needed by runtime library.
      * TODO: Update runtime library to work correctly.
      * TODO: Instrument creation of delegators, so they can inherit the
      * parent's context.
@@ -101,7 +98,7 @@ namespace {
     /*-----------------Methods for finding annotated variables-----------------*/
     bool find_identifiers(Module &M) {
       errs() << "Searching for Identifiers.\n";
-  
+      // Get a reference to annotation function for pointers. 
       Function *TF = M.getFunction("llvm.ptr.annotation.p0i8");
       if (not TF) {
         errs() << "No Identifiers Found!\n";
@@ -131,7 +128,8 @@ namespace {
         // Get Annotation type and variable annotated.
         auto *a = dyn_cast<ConstantArray>(u);
         auto *a_type = dyn_cast<ConstantExpr>(a->getOperand(0)->getOperand(1));
-        auto *a_var = dyn_cast<User>(a->getOperand(0)->getOperand(0))->getOperand(0);
+        auto *a_var = dyn_cast<User>(
+              a->getOperand(0)->getOperand(0))->getOperand(0);
         add_annotated(a_type, a_var);
       }
       return true;
@@ -169,7 +167,6 @@ namespace {
   
     void add_annotated(ConstantExpr *ann_struct_expr, Value *ann_var) {
       StringRef ann_type = gepToStr(ann_struct_expr);
-  
       if (ann_type.contains("indicator")) {
         indicators.insert(ann_var);
       } else if(ann_type.contains("delegator")) {
@@ -179,7 +176,7 @@ namespace {
       }
     }
   
-    /*--------------------Util methods.----------------------------------------*/
+    /*--------------------Util methods.---------------------------------------*/
     StringRef gepToStr(ConstantExpr *annotation) {
       auto *c_str = dyn_cast<GlobalVariable>(annotation->getOperand(0));
       auto *c_data = dyn_cast<ConstantDataArray>(c_str->getInitializer());
