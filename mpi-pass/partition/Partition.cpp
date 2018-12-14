@@ -58,7 +58,7 @@ namespace {
       paramTypes.insert(paramTypes.begin(), Type::getInt32Ty(Ctx));
       retType = Type::getVoidTy(Ctx);
       FunctionType *IndicatorInit = FunctionType::get(retType, paramTypes, false);
-      IndicatorInitFunc = mM->getOrInsertFunction("indicator_switch", IndicatorInit);
+      IndicatorInitFunc = mM->getOrInsertFunction("instrument_indicator", IndicatorInit);
       paramTypes.clear();
     }
   
@@ -81,7 +81,6 @@ namespace {
     }
 
     void instrument_indicators() {
-
       errs() << "Instrumenting Indicators.\n";
       for (auto *indi : indicators) {
         for (auto *u : indi->users()) {
@@ -200,9 +199,9 @@ namespace {
       pa(delegators, "indicators");
     }
 
-    User *v2u(Value *v) {
-      return dyn_cast<User>(v);
-    }
+    User *v2u(Value *v) {return dyn_cast<User>(v);}
+    Value *u2v(User *u) {return dyn_cast<Value>(u);}
+    //User *uOp(Value *v, int idx) {return v2u(v->getOperand(idx));}
   };
 }
 

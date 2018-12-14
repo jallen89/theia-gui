@@ -1,4 +1,8 @@
+#define _GNU_SOURCE
+#include <unistd.h>
 #include "delegation.h"
+#include <sys/types.h>
+#include <sys/syscall.h>
 
 
 void init_lctx()
@@ -9,7 +13,23 @@ void init_lctx()
     map_init(&ctx_tbl.m);
 }
 
-
+void instrument_indicator(int c_id) {
+  long tid;
+  struct context *p_ctx = NULL;
+  
+  // Add New context to ctx map.
+  add_ctx(c_id);
+  tid = syscall(SYS_gettid);
+#ifdef CONFIG_DEBUG
+  p_ctx = get_thread_ctx(tid);
+  if (!p_ctx) {
+    T_DEBUG("Thread context was null, assuming first assignment!\n")
+  } else {
+    T_DEBUG("Context Switch: (%s) ~~> (%d)\n", p_ctx->id, c_id);
+  }
+#endif
+  update_thread_ctx(tid, c_id);
+}
 
 void add_del(int del_id)
 {
@@ -41,21 +61,38 @@ void add_ctx(int ctx_id)
 }
 
 
-void update_thread_ctx(int tid, int del_id)
+void update_thread_ctx(int tid, int ctx_id)
 {
     int err;
     char tmp[17];
 
     // XXX. Called for debugging.
     // TODO. We should fail here probably.
-    _get_del(del_id);
         
-    // Insert tid and del_id into thread_tbl.
-    T_DEBUG("Adding (%d, %d) into del_table.\n", tid, del_id);
+    // Insert tid and ctx_id into thread_tbl.
+    T_DEBUG("Adding (%d, %d) into del_table.\n", tid, ctx_id);
     sprintf(tmp, "%d", tid);
-    err = map_set(&thread_tbl.m, tmp, del_id);
+    err = map_set(&thread_tbl.m, tmp, ctx_id);
     if (err)
-        fail("Failed to insert (%d, %d) into del_table.\n", tid, del_id);
+        fail("Failed to insert (%d, %d) into ctx_table.\n", tid, ctx_id);
+}
+
+struct context *get_thread_ctx(int tid) {
+  struct context *t_ctx = NULL;
+  int *ctx_id;
+  char tmp[17];
+
+   sprintf(tmp, "%d", tid);
+   ctx_id = (int *) map_get(&thread_tbl.m, tmp);
+
+  if (!ctx_id) {
+    T_DEBUG("Failed to get thread context!\n");
+    t_ctx = NULL;
+  } else {
+    t_ctx = _get_ctx(*ctx_id);
+  }
+
+  return t_ctx;
 }
 
 
