@@ -21,9 +21,11 @@ namespace {
     std::set<Value*> indicators;
     std::set<Value*> delegators;
     std::set<Value*> identifiers;
+    std::set<Value*> del_identifiers;
     // Functions created for instrumentation.
     Constant *IDInitFunc = nullptr;
     Constant *IndicatorInitFunc = nullptr;
+    Constant *DelInitFunc = nullptr;
     Module *mM = nullptr;
 
     //Maps A Indicator/Delegator struct mapped to the index into ID field.
@@ -34,15 +36,20 @@ namespace {
       // Add the functions from runtime lib to this module.
       create_instrumentation_funcs();
       // Step 1: Extract the necessary annotations.
-      find_global_annotations(M);
+      //find_global_annotations(M);
       find_local_annotations(M);
-      find_identifiers(M);
+      //find_identifiers(M);
+      //find_del_identifiers(M);
+      find_del_indicators(M);
       // Step 2: Begin Instrumenting Source code. 
-      instrument_indicators();
+      //instrument_indicators();
+      //instrument_delegators();
     }
+
   
     virtual void create_instrumentation_funcs() {
       // Create Function that instruments around ID switches.
+
       LLVMContext &Ctx = mM->getContext();
       std::vector<Type*> paramTypes = {};
       Type *retType = Type::getVoidTy(Ctx);
@@ -57,6 +64,12 @@ namespace {
             retType, paramTypes, false);
       IndicatorInitFunc = mM->getOrInsertFunction(
             "instrument_indicator", IndicatorInit);
+      paramTypes.clear();
+
+      paramTypes.insert(paramTypes.begin(), Type::getInt32Ty(Ctx));
+      retType = Type::getVoidTy(Ctx);
+      FunctionType *DelInit = FunctionType::get(retType, paramTypes, false);
+      DelInitFunc = mM->getOrInsertFunction("instrument_delegator", DelInit);
       paramTypes.clear();
     }
   
@@ -77,6 +90,7 @@ namespace {
       }
     }
 
+
     void instrument_indicators() {
       errs() << "Instrumenting Indicators.\n";
       for (auto *indi : indicators) {
@@ -96,6 +110,54 @@ namespace {
     }
 
     void instrument_delegators() {
+      errs() << "Instrumenting delegators!\n";
+      for (auto *del : del_identifiers) {
+        if (auto *SI = dyn_cast<StoreInst>(del)) {
+          errs() << *SI << "\n";
+          IRBuilder<> builder(SI);
+          builder.SetInsertPoint(SI->getParent(), ++builder.GetInsertPoint());
+          builder.CreateCall(this->DelInitFunc, {SI->getOperand(0)});
+        }
+      }
+    }
+
+
+    void find_del_indicators(Module &M) {
+      auto *del_ind = _find_global(M, "del_indicator");
+      if (!del_ind) {
+        errs() << "Did not find delegation indicator!\n";
+        return;
+      }
+
+      errs() << *del_ind << "\n";
+      for (User *gep: del_ind->users()) {
+        for (User *CI: gep->users()) {
+          auto *ind = v2u(CI->getOperand(0))->getOperand(0);
+          for (User *u: ind->users()) {
+            if (auto *SI = dyn_cast<StoreInst>(u)) {
+              errs() << *SI << "\n";
+            }
+          }
+        }
+      }
+    }
+
+
+    bool find_del_identifiers(Module &M) {
+      auto *del_ident = _find_global(M, "del_identifier");
+      
+      errs() << *M.getFunction("main");
+      // GEP --> CALL --> Bitcast --> Store Function.
+      for (User *gep: del_ident->users()) {
+        for (User *CI: gep->users()) {
+          for (User *BI: CI->users()) {
+            for (User *id : BI->users()) {
+              errs() << *id << "\n";
+              del_identifiers.insert(u2v(id));
+            }
+          }
+        }
+      }
     }
     
     /*-----------------Methods for finding annotated variables-----------------*/
@@ -199,6 +261,18 @@ namespace {
       pa(delegators, "indicators");
     }
 
+    GlobalVariable * _find_global(Module &M, std::string contains) {
+      for (GlobalVariable &g : mM->globals()) {
+        if (!g.hasInitializer()) { continue;}
+        // Search for identifier.
+        if (auto *g_str = dyn_cast<ConstantDataArray>(g.getInitializer())) {
+          if (g_str->getAsString().contains(contains)) {
+            return &g;
+          }
+        }
+      }
+      return nullptr;
+    }
     User *v2u(Value *v) {return dyn_cast<User>(v);}
     Value *u2v(User *u) {return dyn_cast<Value>(u);}
     //User *uOp(Value *v, int idx) {return v2u(v->getOperand(idx));}

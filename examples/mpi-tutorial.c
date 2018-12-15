@@ -5,8 +5,9 @@
 
 #define INDICATOR __attribute__((annotate("indicator")))
 #define DELEGATOR __attribute__((annotate("delegator")))
-#define IND_IDENTIFIER __attribute__((annotate("ind_indentifier")))
-#define DEL_IDENTIFIER __attribute__((annotate("del_indentifier")))
+#define DEL_INDICATOR __attribute__((annotate("del_indicator")))
+#define IND_IDENTIFIER __attribute__((annotate("ind_identifier")))
+#define DEL_IDENTIFIER __attribute__((annotate("del_identifier")))
 /* MPI Static Analysis
  *
  * The MPI Static Analysis Pass does the following 4 steps:
@@ -113,19 +114,117 @@ INDICATOR struct input_buffer *curr_input;
  * worker thread will be needed.
  */
 struct subtask {
-  void (*run)(struct subtask *cur_task, struct input_buffer *);
+  void (*run)(struct input_buffer *input);
   // Each subtask (delegator data structure) needs its own unique id, similar
   // to identifier structures.
   DEL_IDENTIFIER int id;
+  struct subtask *next;
+  struct input_buffer *input;
 };
 
+
+struct worker {
+  void (*work_loop)();
+};
+
+struct work_queue {
+  struct subtask *head;
+  //Add LOCK.
+  pthread_mutex_t lock;
+};
+
+struct work_queue *init_queue()
+{
+  struct work_queue *que = NULL;
+  que = (struct work_queue*) malloc(sizeof(struct work_queue));
+  que->head = NULL;
+  pthread_mutex_init(&que->lock, NULL);
+  return que;
+}
+
+void add_que(struct work_queue *que, struct subtask *tsk)
+{
+  struct subtask *cur;
+
+  pthread_mutex_lock(&que->lock);
+  if (que->head == NULL) {
+    que->head = tsk;
+  } else {
+    cur = que->head;
+    while (cur->next) {cur = cur->next;}
+    cur->next = tsk;
+  }
+  pthread_mutex_unlock(&que->lock);
+}
+
+struct subtask *pop(struct work_queue *que)
+{
+  pthread_mutex_lock(&que->lock);
+  struct subtask *rc;
+  rc = que->head;
+  if (rc)
+    que->head = que->head->next;
+  pthread_mutex_unlock(&que->lock);
+  return rc;
+}
+
+int size(struct work_queue *que) {
+  int cnt = 0;
+  struct subtask *cur = NULL;
+
+  pthread_mutex_lock(&que->lock);
+  cur = que->head;
+  while(cur) {
+    cnt++;
+    cur = cur->next;
+  }
+  pthread_mutex_unlock(&que->lock);
+  return cnt;
+}
+
+struct subtask *init_task()
+{
+  static int id = 0;
+  struct subtask *tsk = NULL; 
+
+  tsk = malloc(sizeof(struct subtask));
+  tsk->next = NULL;
+  tsk->id = id++;
+  return tsk;
+}
+
+void print_que(struct work_queue *que)
+{
+  struct subtask *cur = NULL;
+  printf("Printing queue!\n");
+  cur = que->head;
+  while(cur) {
+    printf("cur ID: %d\n", cur->id);
+    cur = cur->next;
+  }
+}
+
+struct work_queue *que;
+
+void *work_loop(void * arg) {
+
+  DEL_INDICATOR struct subtask *current;
+
+  while (1) {
+    if (size(que) != 0) {
+      current = pop(que);
+      current->run(current->input);
+    }
+  }
+}
 
 /* 
  * The run_upper function creates a new thread, which is responsible for converting the
  * current user_input into a uppercase string and printing it to stdout. 
 */
-void run_upper(struct subtask *task, struct input_buffer* input);
+void upper(struct input_buffer *input);
 
+void start_worker();
 
 int main(int argc, char **argv) {
   struct input_buffer *user_input;
@@ -133,6 +232,9 @@ int main(int argc, char **argv) {
   size_t bytes_read = 0;
   int counter = 0;
   DELEGATOR struct subtask *sub_task = NULL;
+
+  start_worker();
+  que = init_queue();
 
   while (1) {
   //Get user input. For this program we want to track what "user_input"
@@ -162,33 +264,43 @@ int main(int argc, char **argv) {
   // This is because MPI assigns a "context" to each delegation structure,
   // and the delegation structure will inherit the current context that is
   // running in the thread that created/instatiated the new sub task.
-  sub_task = malloc(sizeof(struct subtask));
-  sub_task->id = counter++;
+  sub_task = init_task(); 
+  sub_task->run = upper;
+  sub_task->input = user_input;
+  printf("Adding to queue!\n");
+  add_que(que, sub_task);
+
   // MPIs instrumentation would be similar to the following:
   // 1. Set context for subtask to current context.
   // 2. Update delegation table.
   // sub_task->context = delegation_table[cur_task];
   // delegation_table[sub_task] = sub_task->context.
-  sub_task->run = run_upper;
-  sub_task->run(sub_task, &curr_input);
   }
   return 0;
 }
 
-void *upper(void *in) {
+void upper(struct input_buffer *input) {
   printf("Background Thread.\n");
-  struct input_buffer *input = (struct input_buffer*) in;
   for (size_t i = 0; i < input->size; i++) {
     input->user_input[i] = toupper(input->user_input[i]);
   }
   printf("Input (%lu): %s", input->size, input->user_input);
-  return NULL;
+}
+
+void start_worker(){
+  pthread_t thread;
+  int rc = 0;
+  rc = pthread_create(&thread, NULL, work_loop, NULL);
+  if (rc) {
+    fprintf(stderr, "Error; return code from pthread_create() is %d\n", rc);
+    exit(-1);
+  }
 }
 
 void run_upper(struct subtask *task, struct input_buffer* input) {
   pthread_t thread;
   int rc = 0;
-  rc = pthread_create(&thread, NULL, upper, (void *) curr_input);
+  //rc = pthread_create(&thread, NULL, work_loop);
   if (rc) {
     fprintf(stderr, "Error; return code from pthread_create() is %d\n", rc);
     exit(-1);
