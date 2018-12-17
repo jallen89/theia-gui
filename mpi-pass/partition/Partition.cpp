@@ -22,10 +22,12 @@ namespace {
     std::set<Value*> delegators;
     std::set<Value*> identifiers;
     std::set<Value*> del_identifiers;
+    std::set<Value*> del_indicators;
     // Functions created for instrumentation.
     Constant *IDInitFunc = nullptr;
     Constant *IndicatorInitFunc = nullptr;
     Constant *DelInitFunc = nullptr;
+    Constant *DelIDInitFunc = nullptr;
     Module *mM = nullptr;
 
     //Maps A Indicator/Delegator struct mapped to the index into ID field.
@@ -36,14 +38,15 @@ namespace {
       // Add the functions from runtime lib to this module.
       create_instrumentation_funcs();
       // Step 1: Extract the necessary annotations.
-      //find_global_annotations(M);
+      find_global_annotations(M);
       find_local_annotations(M);
-      //find_identifiers(M);
-      //find_del_identifiers(M);
+      find_identifiers(M);
+      find_del_identifiers(M);
       find_del_indicators(M);
       // Step 2: Begin Instrumenting Source code. 
-      //instrument_indicators();
-      //instrument_delegators();
+      instrument_indicators();
+      instrument_delegators();
+      instrument_del_indicators();
     }
 
   
@@ -71,6 +74,29 @@ namespace {
       FunctionType *DelInit = FunctionType::get(retType, paramTypes, false);
       DelInitFunc = mM->getOrInsertFunction("instrument_delegator", DelInit);
       paramTypes.clear();
+
+      // Create function to instrument a delegator indicator. This function
+      // changes the context of the current executing context to the ctx id of
+      // the delegator (subtask) that it is about to execute.
+      paramTypes.insert(paramTypes.begin(), Type::getInt32Ty(Ctx));
+      retType = Type::getVoidTy(Ctx);
+      FunctionType *DelIDInit = FunctionType::get(retType, paramTypes, false);
+      DelIDInitFunc = mM->getOrInsertFunction("instrument_del_indicator", DelIDInit);
+      paramTypes.clear();
+    }
+
+    void instrument_del_indicators() {
+      for (Value *DI : del_indicators) {
+        auto *SI = dyn_cast<StoreInst>(DI);
+        auto idx = ArrayRef<Value*>(id_map[v2u(SI)->getOperand(0)->getType()]);
+        IRBuilder<> builder(SI); 
+        builder.SetInsertPoint(SI->getParent(), ++builder.GetInsertPoint());
+        auto *gep = builder.CreateGEP(SI->getOperand(0), idx, "gep");
+        auto *cid = builder.CreateLoad(gep, "CID");
+        auto *delID = builder.CreateCall(this->DelIDInitFunc, {cid});
+        errs() << "Instrumented del\n" << *SI->getParent() << "\n";
+        errs() << "DelID: " << *delID << "\n";
+      }
     }
   
     /* ------------------Methods for instrumenting code.-----------------------
@@ -109,6 +135,7 @@ namespace {
       }
     }
 
+
     void instrument_delegators() {
       errs() << "Instrumenting delegators!\n";
       for (auto *del : del_identifiers) {
@@ -135,7 +162,7 @@ namespace {
           auto *ind = v2u(CI->getOperand(0))->getOperand(0);
           for (User *u: ind->users()) {
             if (auto *SI = dyn_cast<StoreInst>(u)) {
-              errs() << *SI << "\n";
+              del_indicators.insert(SI);
             }
           }
         }

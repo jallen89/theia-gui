@@ -83,6 +83,17 @@ void instrument_delegator(int del_id)
   }
 }
 
+void instrument_del_indicator(int ctx_id)
+{
+  long tid;
+  T_DEBUG("Instrumenting del indicator: ctx %d!\n", ctx_id);
+  //long tid;
+  //T_INFO("Calling instrument del indicator!\n");
+  tid = syscall(SYS_gettid);
+  //T_INFO("Setting thread %d ctx to: %d\n", tid, ctx_id);
+  update_thread_ctx(tid, ctx_id);
+}
+
 
 void update_thread_ctx(int tid, int ctx_id)
 {

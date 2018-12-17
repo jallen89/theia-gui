@@ -117,8 +117,8 @@ struct subtask {
   void (*run)(struct input_buffer *input);
   // Each subtask (delegator data structure) needs its own unique id, similar
   // to identifier structures.
-  DEL_IDENTIFIER int id;
   struct subtask *next;
+  DEL_IDENTIFIER int id;
   struct input_buffer *input;
 };
 
@@ -206,13 +206,14 @@ void print_que(struct work_queue *que)
 
 struct work_queue *que;
 
-void *work_loop(void * arg) {
-
+void *work_loop(void * arg)
+{
   DEL_INDICATOR struct subtask *current;
-
   while (1) {
     if (size(que) != 0) {
+      printf("Found job in que!\n");
       current = pop(que);
+      printf("Current ID: %d\n", current->id);
       current->run(current->input);
     }
   }
