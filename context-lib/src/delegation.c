@@ -1,22 +1,49 @@
 #define _GNU_SOURCE
 #include <unistd.h>
+#include <string.h>
 #include "delegation.h"
 #include <sys/types.h>
 #include <sys/syscall.h>
+#include <sys/time.h>
+
+FILE *fptr;
+int is_initialized = 0;
 
 
 void init_lctx()
 {
-    T_DEBUG("Initializing lctx!\n");
-    map_init(&del_tbl.m);
-    map_init(&thread_tbl.m);
-    map_init(&ctx_tbl.m);
+  if(is_initialized)
+    return;
+
+  is_initialized = 1;
+  T_DEBUG("Initializing lctx!\n");
+  map_init(&del_tbl.m);
+  map_init(&thread_tbl.m);
+  map_init(&ctx_tbl.m);
+
+  fptr = fopen("context.log", "wr");
+  if (!fptr)
+    fail("Failed to open context log!\n");
+}
+
+void write_log(long tid, int c_id) {
+  char tmp[256];
+  struct timeval tv;
+  int size;
+
+  gettimeofday(&tv, NULL);
+  memset(&tmp, 0, sizeof(tmp));
+  size = sprintf(tmp, "%lu|%d|%lu|%lu\n", tid, c_id, tv.tv_sec, tv.tv_usec);
+  fwrite(tmp, sizeof(char), sizeof(tmp), fptr);
+  fflush(fptr);
 }
 
 void instrument_indicator(int c_id)
 {
   long tid;
   struct context *p_ctx = NULL;
+
+  init_lctx();
   
   // Add New context to ctx map.
   add_ctx(c_id);
@@ -54,6 +81,7 @@ void instrument_delegator(int del_id)
   struct context *t_ctx = NULL;
   struct delegator *del = NULL;
 
+  init_lctx();
   // Get delegator struct or create new one.
   del = _get_del(del_id);
   if (!del) {
@@ -86,6 +114,7 @@ void instrument_delegator(int del_id)
 void instrument_del_indicator(int ctx_id)
 {
   long tid;
+  init_lctx();
   T_DEBUG("Instrumenting del indicator: ctx %d!\n", ctx_id);
   //long tid;
   //T_INFO("Calling instrument del indicator!\n");
@@ -97,18 +126,20 @@ void instrument_del_indicator(int ctx_id)
 
 void update_thread_ctx(int tid, int ctx_id)
 {
-    int err;
-    char tmp[17];
+  int err;
+  char tmp[17];
 
-    // XXX. Called for debugging.
-    // TODO. We should fail here probably.
-        
-    // Insert tid and ctx_id into thread_tbl.
-    T_DEBUG("Adding (%d, %d) into del_table.\n", tid, ctx_id);
-    sprintf(tmp, "%d", tid);
-    err = map_set(&thread_tbl.m, tmp, ctx_id);
-    if (err)
-        fail("Failed to insert (%d, %d) into ctx_table.\n", tid, ctx_id);
+  // XXX. Called for debugging.
+  // TODO. We should fail here probably.
+      
+  // Insert tid and ctx_id into thread_tbl.
+  T_DEBUG("Adding (%d, %d) into del_table.\n", tid, ctx_id);
+  sprintf(tmp, "%d", tid);
+  err = map_set(&thread_tbl.m, tmp, ctx_id);
+  if (err)
+      fail("Failed to insert (%d, %d) into ctx_table.\n", tid, ctx_id);
+
+  write_log(tid, ctx_id);
 }
 
 struct context *get_thread_ctx(int tid) {
