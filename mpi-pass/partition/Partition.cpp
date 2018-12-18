@@ -22,9 +22,7 @@ namespace {
     std::set<Value*> delegators;
     std::set<Value*> identifiers;
     std::set<Value*> del_identifiers;
-    std::set<Value*> del_indicators;
     // Functions created for instrumentation.
-    Constant *IDInitFunc = nullptr;
     Constant *IndicatorInitFunc = nullptr;
     Constant *DelInitFunc = nullptr;
     Constant *DelIDInitFunc = nullptr;
@@ -42,83 +40,27 @@ namespace {
       find_local_annotations(M);
       find_identifiers(M);
       find_del_identifiers(M);
-      find_del_indicators(M);
       // Step 2: Begin Instrumenting Source code. 
       instrument_indicators();
       instrument_delegators();
-      instrument_del_indicators();
     }
 
   
     virtual void create_instrumentation_funcs() {
-      // Create Function that instruments around ID switches.
+      // Create return, arg, and function Types.
+      std::vector<Type*> paramTypes = {Type::getInt32Ty(mM->getContext())};
+      auto *retType = Type::getVoidTy(mM->getContext());
+      auto *InstrumentTy = FunctionType::get(retType, paramTypes, false);
 
-      LLVMContext &Ctx = mM->getContext();
-      std::vector<Type*> paramTypes = {};
-      Type *retType = Type::getVoidTy(Ctx);
-      FunctionType *IDIni = FunctionType::get(retType, paramTypes, false);
-      IDInitFunc = mM->getOrInsertFunction("hello", IDIni);
-      paramTypes.clear();
-
-      // Create Function that instruments around indicator switches.
-      paramTypes.insert(paramTypes.begin(), Type::getInt32Ty(Ctx));
-      retType = Type::getVoidTy(Ctx);
-      FunctionType *IndicatorInit = FunctionType::get(
-            retType, paramTypes, false);
-      IndicatorInitFunc = mM->getOrInsertFunction(
-            "instrument_indicator", IndicatorInit);
-      paramTypes.clear();
-
-      paramTypes.insert(paramTypes.begin(), Type::getInt32Ty(Ctx));
-      retType = Type::getVoidTy(Ctx);
-      FunctionType *DelInit = FunctionType::get(retType, paramTypes, false);
-      DelInitFunc = mM->getOrInsertFunction("instrument_delegator", DelInit);
-      paramTypes.clear();
-
-      // Create function to instrument a delegator indicator. This function
-      // changes the context of the current executing context to the ctx id of
-      // the delegator (subtask) that it is about to execute.
-      paramTypes.insert(paramTypes.begin(), Type::getInt32Ty(Ctx));
-      retType = Type::getVoidTy(Ctx);
-      FunctionType *DelIDInit = FunctionType::get(retType, paramTypes, false);
-      DelIDInitFunc = mM->getOrInsertFunction("instrument_del_indicator", DelIDInit);
-      paramTypes.clear();
+      // Create instrumentation function types.
+      IndicatorInitFunc = mM->getOrInsertFunction("instrument_indicator", InstrumentTy);
+      DelInitFunc = mM->getOrInsertFunction("instrument_delegator", InstrumentTy);
+      DelIDInitFunc = mM->getOrInsertFunction("instrument_del_indicator", InstrumentTy);
     }
 
-    void instrument_del_indicators() {
-      for (Value *DI : del_indicators) {
-        auto *SI = dyn_cast<StoreInst>(DI);
-        auto idx = ArrayRef<Value*>(id_map[v2u(SI)->getOperand(0)->getType()]);
-        IRBuilder<> builder(SI); 
-        builder.SetInsertPoint(SI->getParent(), ++builder.GetInsertPoint());
-        auto *gep = builder.CreateGEP(SI->getOperand(0), idx, "gep");
-        auto *cid = builder.CreateLoad(gep, "CID");
-        auto *delID = builder.CreateCall(this->DelIDInitFunc, {cid});
-        errs() << "Instrumented del\n" << *SI->getParent() << "\n";
-        errs() << "DelID: " << *delID << "\n";
-      }
-    }
-  
     /* ------------------Methods for instrumenting code.-----------------------
-     * TODO: Update runtime library to work correctly.
-     * TODO: Instrument creation of delegators, so they can inherit the
-     * parent's context.
-     */
-    void instrument_identifiers() {
-      errs() << "Instrumentating indentifiers!\n";
-      for(auto *ind : identifiers) {
-        //XXX. Is there cases where this will not be a store instruction.
-        if (auto *AI = dyn_cast<StoreInst>(ind)) {
-          IRBuilder<> builder(AI);
-          builder.SetInsertPoint(AI->getParent(), ++builder.GetInsertPoint());
-          builder.CreateCall(this->IDInitFunc);
-        }
-      }
-    }
-
-
+     * */
     void instrument_indicators() {
-      errs() << "Instrumenting Indicators.\n";
       for (auto *indi : indicators) {
         for (auto *u : indi->users()) {
           if (auto *I = dyn_cast<StoreInst>(u)) {
@@ -135,36 +77,12 @@ namespace {
       }
     }
 
-
     void instrument_delegators() {
-      errs() << "Instrumenting delegators!\n";
       for (auto *del : del_identifiers) {
         if (auto *SI = dyn_cast<StoreInst>(del)) {
-          errs() << *SI << "\n";
           IRBuilder<> builder(SI);
           builder.SetInsertPoint(SI->getParent(), ++builder.GetInsertPoint());
           builder.CreateCall(this->DelInitFunc, {SI->getOperand(0)});
-        }
-      }
-    }
-
-
-    void find_del_indicators(Module &M) {
-      auto *del_ind = _find_global(M, "del_indicator");
-      if (!del_ind) {
-        errs() << "Did not find delegation indicator!\n";
-        return;
-      }
-
-      errs() << *del_ind << "\n";
-      for (User *gep: del_ind->users()) {
-        for (User *CI: gep->users()) {
-          auto *ind = v2u(CI->getOperand(0))->getOperand(0);
-          for (User *u: ind->users()) {
-            if (auto *SI = dyn_cast<StoreInst>(u)) {
-              del_indicators.insert(SI);
-            }
-          }
         }
       }
     }
@@ -186,7 +104,8 @@ namespace {
         }
       }
     }
-    
+
+
     /*-----------------Methods for finding annotated variables-----------------*/
     bool find_identifiers(Module &M) {
       errs() << "Searching for Identifiers.\n";
@@ -302,7 +221,6 @@ namespace {
     }
     User *v2u(Value *v) {return dyn_cast<User>(v);}
     Value *u2v(User *u) {return dyn_cast<Value>(u);}
-    //User *uOp(Value *v, int idx) {return v2u(v->getOperand(idx));}
   };
 }
 
